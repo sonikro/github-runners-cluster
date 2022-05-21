@@ -16,17 +16,14 @@ on:
       - .github/workflows/destroy**
 
 jobs:
-  terraform:
-    name: Terraform CI
+  cluster-terraform:
+    name: Cluster Terraform CI
     runs-on: ubuntu-latest
     container: hashicorp/terraform:1.2.0
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Format
-        id: fmt
-        run: terraform fmt -check
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -35,52 +32,56 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Format
+        id: fmt-cluster
+        run: terraform fmt -check
+
       - name: Init
-        id: init
+        id: init-cluster
         run: terraform init
 
       - name: Validate
-        id: validate
+        id: validate-cluster
         run: terraform validate -no-color
 
       - name: Plan
-        id: plan
+        id: plan-cluster
         if: github.event_name == 'pull_request'
         run: |
           PLAN=$(terraform plan -no-color -input=false)
           SCRIPT_RC=$?
-          echo "::set-output name=plan::${PLAN//$'\n'/\\n}"
+          echo "::set-output name=cluster_plan::${PLAN//$'\n'/\\n}"
           exit $SCRIPT_RC
         continue-on-error: true
 
-      - name: Plan for Deploy
+      - name: Cluster Plan for Deploy
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform plan -no-color -input=false --out plan.json
+        run: terraform plan -no-color -input=false --out plan-cluster.json
 
-      - name: Stash plan
+      - name: Stash Plan for Deploy
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/upload-artifact@v3
         with:
-          name: plan
-          path: plan.json
+          name: plan-cluster
+          path: plan-cluster.json
 
       - name: Update Pull Request
         uses: actions/github-script@v6
         if: github.event_name == 'pull_request'
         env:
-          PLAN: "terraform\n${{ steps.plan.outputs.plan }}"
+          CLUSTER_PLAN: "terraform\n${{ steps.plan-cluster.outputs.cluster_plan }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
-            #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
-            #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
-            #### Terraform Validation 🤖\`${{ steps.validate.outcome }}\`
+            const output = `#### [CLUSTER] Terraform Format and Style 🖌\`${{ steps.fmt-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Initialization ⚙️\`${{ steps.init-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Plan 📖\`${{ steps.plan-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Validation 🤖\`${{ steps.validate-cluster.outcome }}\`
 
-            <details><summary>Show Plan</summary>
+            <details><summary>Show Plan for Cluster</summary>
 
             \`\`\`\n
-            ${process.env.PLAN.replace(/\\n/g, '\n')}
+            ${process.env.CLUSTER_PLAN.replace(/\\n/g, '\n')}
             \`\`\`
 
             </details>
@@ -93,13 +94,15 @@ jobs:
               repo: context.repo.repo,
               body: output
             })
-      - name: Terraform Plan Status
-        if: steps.plan.outcome == 'failure'
-        run: exit 1
 
-  deploy:
-    needs: terraform
-    name: Terraform CD
+      - name: Terraform Cluster Plan Status
+        if: steps.plan-cluster.outcome == 'failure'
+        run: exit 1
+      
+  
+  deploy-cluster:
+    needs: [cluster-terraform]
+    name: Deploy Cluster
     environment: development
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -110,7 +113,7 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: plan
+          name: plan-cluster
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -123,4 +126,123 @@ jobs:
         run: terraform init
 
       - name: Apply
-        run: terraform apply -auto-approve -input=false plan.json
+        run: terraform apply -auto-approve -input=false plan-cluster.json
+  
+  setup-terraform:
+    needs: [deploy-cluster, cluster-terraform]
+    name: K8S Setup Terraform CI
+    runs-on: ubuntu-latest
+    container: hashicorp/terraform:1.2.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+          
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Format
+        id: fmt-setup
+        working-directory: setup
+        run: terraform fmt -check
+
+      - name: Init
+        id: init-setup
+        working-directory: setup
+        run: terraform init
+
+      - name: Validate
+        id: validate-setup
+        working-directory: setup
+        run: terraform validate -no-color
+
+      - name: Plan
+        id: plan-setup
+        working-directory: setup
+        if: github.event_name == 'pull_request'
+        run: |
+          PLAN=$(terraform plan -no-color -input=false)
+          SCRIPT_RC=$?
+          echo "::set-output name=setup_plan::${PLAN//$'\n'/\\n}"
+          exit $SCRIPT_RC
+        continue-on-error: true
+
+      - name: Setup Plan for Deploy
+        working-directory: setup
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform plan -no-color -input=false --out plan-setup.json
+
+      - name: Stash Plan for Deploy
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v3
+        with:
+          name: plan-setup
+          path: plan-setup.json
+
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        env:
+          SETUP_PLAN: "terraform\n${{ steps.plan-setup.outputs.setup_plan }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### [SETUP] Terraform Format and Style 🖌\`${{ steps.fmt-setup.outcome }}\`
+            #### [SETUP] Terraform Initialization ⚙️\`${{ steps.init-setup.outcome }}\`
+            #### [SETUP] Terraform Plan 📖\`${{ steps.plan-setup.outcome }}\`
+            #### [SETUP] Terraform Validation 🤖\`${{ steps.validate-setup.outcome }}\`
+
+
+            <details><summary>Show Plan for Setup</summary>
+
+            \`\`\`\n
+            ${process.env.SETUP_PLAN.replace(/\\n/g, '\n')}
+            \`\`\`
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Terraform Setup Plan Status
+        if: steps.plan-setup.outcome == 'failure'
+        run: exit 1
+
+  setup-cluster:
+    needs: [deploy-cluster, setup-terraform]
+    name: Setup Cluster
+    environment: development
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    container: hashicorp/terraform:1.2.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: plan-setup
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Init
+        working-directory: setup
+        run: terraform init
+
+      - name: Setup Charts
+        working-directory: setup
+        run: terraform apply -auto-approve -input=false plan-setup.json
