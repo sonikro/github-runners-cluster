@@ -3,7 +3,6 @@ on:
 
 jobs:
   destroy:
-    needs: terraform
     name: Terraform Destroy
     environment: development
     runs-on: ubuntu-latest
