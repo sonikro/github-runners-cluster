@@ -38,7 +38,11 @@ jobs:
       - name: Plan
         id: plan
         if: github.event_name == 'pull_request'
-        run: echo "::set-output name=plan::$(terraform plan -no-color -input=false)"
+        run: |
+          PLAN=$(terraform plan -no-color -input=false)
+          SCRIPT_RC=$?
+          echo "::set-output name=plan::${PLAN//$'\n'/\\n}"
+          exit $SCRIPT_RC
 
         continue-on-error: true
 
@@ -58,7 +62,7 @@ jobs:
             <details><summary>Show Plan</summary>
 
             \`\`\`\n
-            ${process.env.PLAN}
+            ${process.env.PLAN.replace(/\\n/g, '\n')}
             \`\`\`
 
             </details>
