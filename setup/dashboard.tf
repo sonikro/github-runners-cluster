@@ -1,5 +1,5 @@
-resource "helm_release" "nginx_ingress" {
-  namespace = kubernetes_namespace.kube-system-ns.metadata.0.name
+resource "helm_release" "dashboard" {
+  namespace = data.kubernetes_namespace.kube-system-ns.metadata.0.name
   wait      = true
   timeout   = 600
 
