@@ -9,7 +9,7 @@ on:
 
 jobs:
   terraform:
-    name: Terraform
+    name: Terraform CI
     runs-on: ubuntu-latest
     container: hashicorp/terraform:1.2.0
     steps:
@@ -43,8 +43,18 @@ jobs:
           SCRIPT_RC=$?
           echo "::set-output name=plan::${PLAN//$'\n'/\\n}"
           exit $SCRIPT_RC
-
         continue-on-error: true
+
+      - name: Plan for Deploy
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: terraform plan -no-color -input=false --out plan.json
+
+      - name: Stash plan
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v3
+        with:
+          name: plan
+          path: plan.json
 
       - name: Update Pull Request
         uses: actions/github-script@v6
@@ -79,6 +89,16 @@ jobs:
         if: steps.plan.outcome == 'failure'
         run: exit 1
 
-      # - name: Terraform Apply
-      #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      #   run: terraform apply -auto-approve -input=false
+  deploy:
+    needs: terraform
+    name: Terraform CD
+    environment: development
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    container: hashicorp/terraform:1.2.0
+    steps:
+      - uses: actions/download-artifact@v3
+        with:
+          name: plan
+      - name: Apply
+        run: terraform apply -auto-approve -input=false plan.json
