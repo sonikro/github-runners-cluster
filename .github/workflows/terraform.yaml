@@ -16,8 +16,8 @@ on:
       - .github/workflows/destroy**
 
 jobs:
-  terraform:
-    name: Terraform CI
+  cluster-terraform:
+    name: Cluster Terraform CI
     runs-on: ubuntu-latest
     container: hashicorp/terraform:1.2.0
     steps:
@@ -64,8 +64,59 @@ jobs:
         with:
           name: plan-cluster
           path: plan-cluster.json
-      
 
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        env:
+          CLUSTER_PLAN: "terraform\n${{ steps.plan-cluster.outputs.cluster_plan }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### [CLUSTER] Terraform Format and Style 🖌\`${{ steps.fmt-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Initialization ⚙️\`${{ steps.init-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Plan 📖\`${{ steps.plan-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Validation 🤖\`${{ steps.validate-cluster.outcome }}\`
+
+            <details><summary>Show Plan for Cluster</summary>
+
+            \`\`\`\n
+            ${process.env.CLUSTER_PLAN.replace(/\\n/g, '\n')}
+            \`\`\`
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Terraform Cluster Plan Status
+        if: steps.plan-cluster.outcome == 'failure'
+        run: exit 1
+      
+  
+  setup-terraform:
+    needs: cluster-terraform
+    name: K8S Setup Terraform CI
+    runs-on: ubuntu-latest
+    container: hashicorp/terraform:1.2.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+          
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+     
       - name: Format
         id: fmt-setup
         working-directory: setup
@@ -108,25 +159,11 @@ jobs:
         uses: actions/github-script@v6
         if: github.event_name == 'pull_request'
         env:
-          CLUSTER_PLAN: "terraform\n${{ steps.plan-cluster.outputs.cluster_plan }}"
           SETUP_PLAN: "terraform\n${{ steps.plan-setup.outputs.setup_plan }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = `#### [CLUSTER] Terraform Format and Style 🖌\`${{ steps.fmt-cluster.outcome }}\`
-            #### [CLUSTER] Terraform Initialization ⚙️\`${{ steps.init-cluster.outcome }}\`
-            #### [CLUSTER] Terraform Plan 📖\`${{ steps.plan-cluster.outcome }}\`
-            #### [CLUSTER] Terraform Validation 🤖\`${{ steps.validate-cluster.outcome }}\`
-
-            <details><summary>Show Plan for Cluster</summary>
-
-            \`\`\`\n
-            ${process.env.CLUSTER_PLAN.replace(/\\n/g, '\n')}
-            \`\`\`
-
-            </details>
-
-            #### [SETUP] Terraform Format and Style 🖌\`${{ steps.fmt-setup.outcome }}\`
+            const output = `#### [SETUP] Terraform Format and Style 🖌\`${{ steps.fmt-setup.outcome }}\`
             #### [SETUP] Terraform Initialization ⚙️\`${{ steps.init-setup.outcome }}\`
             #### [SETUP] Terraform Plan 📖\`${{ steps.plan-setup.outcome }}\`
             #### [SETUP] Terraform Validation 🤖\`${{ steps.validate-setup.outcome }}\`
@@ -149,16 +186,12 @@ jobs:
               body: output
             })
 
-      - name: Terraform Cluster Plan Status
-        if: steps.plan-cluster.outcome == 'failure'
-        run: exit 1
-      
       - name: Terraform Setup Plan Status
         if: steps.plan-setup.outcome == 'failure'
         run: exit 1
 
   deploy-cluster:
-    needs: terraform
+    needs: [cluster-terraform, setup-terraform]
     name: Deploy Cluster
     environment: development
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
