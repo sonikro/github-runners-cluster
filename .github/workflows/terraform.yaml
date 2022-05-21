@@ -38,14 +38,19 @@ jobs:
       - name: Plan
         id: plan
         if: github.event_name == 'pull_request'
-        run: terraform plan -no-color -input=false
+        run: |
+          PLAN=$(terraform plan -no-color -input=false)
+          SCRIPT_RC=$?
+          echo "::set-output name=plan::${PLAN//$'\n'/\\n}"
+          exit $SCRIPT_RC
+
         continue-on-error: true
 
       - name: Update Pull Request
         uses: actions/github-script@v6
         if: github.event_name == 'pull_request'
         env:
-          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+          PLAN: "terraform\n${{ steps.plan.outputs.plan }}"
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -57,7 +62,7 @@ jobs:
             <details><summary>Show Plan</summary>
 
             \`\`\`\n
-            ${process.env.PLAN}
+            ${process.env.PLAN.replace(/\\n/g, '\n')}
             \`\`\`
 
             </details>
