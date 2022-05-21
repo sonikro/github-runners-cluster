@@ -34,5 +34,9 @@ provider "aws" {
 }
 
 locals {
-  cluster_name = "sonikro-eks-${random_string.suffix.result}"
+  cluster_name    = "sonikro-eks-${random_string.suffix.result}"
+  cluster_version = "1.22"
+  tags = {
+    component = "sonikro-eks"
+  }
 }
