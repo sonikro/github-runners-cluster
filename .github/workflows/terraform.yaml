@@ -100,5 +100,13 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           name: plan
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
       - name: Apply
         run: terraform apply -auto-approve -input=false plan.json
