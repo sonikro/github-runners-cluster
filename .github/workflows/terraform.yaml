@@ -100,8 +100,36 @@ jobs:
         run: exit 1
       
   
+  deploy-cluster:
+    needs: [cluster-terraform]
+    name: Deploy Cluster
+    environment: development
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    container: hashicorp/terraform:1.2.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: plan-cluster
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Init
+        run: terraform init
+
+      - name: Apply
+        run: terraform apply -auto-approve -input=false plan-cluster.json
+  
   setup-terraform:
-    needs: cluster-terraform
+    needs: [deploy-cluster, cluster-terraform]
     name: K8S Setup Terraform CI
     runs-on: ubuntu-latest
     container: hashicorp/terraform:1.2.0
@@ -116,7 +144,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-     
       - name: Format
         id: fmt-setup
         working-directory: setup
@@ -190,36 +217,8 @@ jobs:
         if: steps.plan-setup.outcome == 'failure'
         run: exit 1
 
-  deploy-cluster:
-    needs: [cluster-terraform, setup-terraform]
-    name: Deploy Cluster
-    environment: development
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    container: hashicorp/terraform:1.2.0
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - uses: actions/download-artifact@v3
-        with:
-          name: plan-cluster
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Init
-        run: terraform init
-
-      - name: Apply
-        run: terraform apply -auto-approve -input=false plan-cluster.json
-  
   setup-cluster:
-    needs: deploy-cluster
+    needs: [deploy-cluster, setup-terraform]
     name: Setup Cluster
     environment: development
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
