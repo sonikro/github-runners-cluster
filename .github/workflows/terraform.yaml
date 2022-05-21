@@ -55,7 +55,7 @@ jobs:
 
       - name: Plan for Deploy
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform state rm module.eks.kubernetes_config_map.aws_auth && terraform plan -no-color -input=false --out plan.json
+        run: terraform plan -no-color -input=false --out plan.json
 
       - name: Stash plan
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
