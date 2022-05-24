@@ -250,4 +250,4 @@ jobs:
 
       - name: Setup Charts
         working-directory: setup
-        run: terraform apply -auto-approve -input=false setup/plan-setup.json
+        run: terraform apply -auto-approve -input=false plan-setup.json
