@@ -184,7 +184,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: plan-setup
-          path: plan-setup.json
+          path: setup/plan-setup.json
 
       - name: Update Pull Request
         uses: actions/github-script@v6
