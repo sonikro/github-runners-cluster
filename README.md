@@ -12,3 +12,21 @@ Using AWS CLI, just run
 ```bash
 aws eks --region us-east-1 update-kubeconfig --name $(terraform output -raw cluster_id)
 ```
+
+## Accessing the Kubernetes Dashboard
+
+After being authenticated to the cluster, run:
+
+```bash
+kubectl port-forward svc/kubernetes-dashboard -n kubernetes-dashboard 6443:443
+```
+
+Now access it at [https://127.0.0.1:6443/#/login](https://127.0.0.1:6443/#/login)
+
+Now, you need to generate a Bearer token for the **eks-admin** service account.
+
+```bash
+kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep eks-admin | awk '{print $1}')
+```
+
+Copy the Token, and use it to authenticate to the Dashboard
