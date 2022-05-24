@@ -222,7 +222,7 @@ jobs:
         run: exit 1
 
   setup-cluster:
-    needs: [deploy-cluster, setup-terraform]
+    needs: [deploy-cluster, k8s-setup-terraform]
     name: Setup Cluster
     environment: development
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
