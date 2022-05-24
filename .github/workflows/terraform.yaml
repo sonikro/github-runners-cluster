@@ -104,18 +104,20 @@ jobs:
     needs: [cluster-terraform]
     name: Deploy Cluster
     environment: development
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     container: hashicorp/terraform:1.2.0
     steps:
       - name: Checkout
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/checkout@v3
 
       - uses: actions/download-artifact@v3
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         with:
           name: plan-cluster
 
       - name: Configure AWS Credentials
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v1
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -123,12 +125,14 @@ jobs:
           aws-region: us-east-1
 
       - name: Init
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform init
 
       - name: Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -input=false plan-cluster.json
   
-  setup-terraform:
+  k8s-setup-terraform:
     needs: [deploy-cluster, cluster-terraform]
     name: K8S Setup Terraform CI
     runs-on: ubuntu-latest
