@@ -1,11 +1,10 @@
 resource "helm_release" "action-runner-controller" {
-  create_namespace = true
-  name             = "actions-runner-controller"
+
   namespace        = "actions-runner-system"
   repository       = "https://actions-runner-controller.github.io/actions-runner-controller"
   chart            = "actions-runner-controller"
-  wait             = true
-  timeout          = 600
+  name             = "actions-runner-controller"
+  create_namespace = true
 
   set {
     name  = "webhookPort"
@@ -13,13 +12,18 @@ resource "helm_release" "action-runner-controller" {
   }
 
   set {
-    name  = "podLabels"
-    value = "github-action-runners"
+    name  = "github_webhook_secret_token"
+    value = var.webhook_secret
   }
 
   set {
-    name  = "github_webhook_secret_token"
-    value = ""
+    name  = "authSecret.create"
+    value = true
   }
+  set {
+    name  = "authSecret.github_token"
+    value = var.personal_access_token
+  }
+
 
 }
