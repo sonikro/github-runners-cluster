@@ -1,20 +1,14 @@
 resource "helm_release" "action-runner-controller" {
 
-  namespace        = "actions-runner-system"
+  depends_on = [
+    helm_release.cert-manager
+  ]
+
+  namespace        = var.runner_namespace
   repository       = "https://actions-runner-controller.github.io/actions-runner-controller"
   chart            = "actions-runner-controller"
   name             = "actions-runner-controller"
   create_namespace = true
-
-  set {
-    name  = "webhookPort"
-    value = "9443"
-  }
-
-  set {
-    name  = "github_webhook_secret_token"
-    value = var.webhook_secret
-  }
 
   set {
     name  = "authSecret.create"
@@ -24,6 +18,5 @@ resource "helm_release" "action-runner-controller" {
     name  = "authSecret.github_token"
     value = var.personal_access_token
   }
-
 
 }
