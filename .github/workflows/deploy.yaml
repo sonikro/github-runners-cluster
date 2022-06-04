@@ -6,7 +6,7 @@ on:
     paths-ignore:
       - "**.md"
       - .gitignore
-      
+   
 jobs:
   cluster-terraform:
     name: Cluster Terraform CI
@@ -90,8 +90,7 @@ jobs:
       - name: Terraform Cluster Plan Status
         if: steps.plan-cluster.outcome == 'failure'
         run: exit 1
-      
-  
+
   deploy-cluster:
     needs: [cluster-terraform]
     name: Deploy Cluster
@@ -123,7 +122,7 @@ jobs:
       - name: Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve -input=false plan-cluster.json
-  
+
   k8s-setup-terraform:
     needs: [deploy-cluster, cluster-terraform]
     name: K8S Setup Terraform CI
@@ -132,7 +131,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-          
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
         with:

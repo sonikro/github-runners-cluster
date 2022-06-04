@@ -6,38 +6,41 @@ on:
     paths-ignore:
       - "**.md"
       - .gitignore
-      
+
 jobs:
   actionlint:
-    name: 'Github Actions Lint'
+    name: "Github Actions Lint"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: reviewdog/action-actionlint@v1
 
   yamllint:
-    name: 'YAML Lint'
+    name: "YAML Lint"
     runs-on: ubuntu-latest
     steps:
-      - name: 'Checkout'
+      - name: "Checkout"
         uses: actions/checkout@master
-      - name: 'Yamllint'
+      - name: "Yamllint"
         uses: karancode/yamllint-github-action@master
         with:
           yamllint_config_filepath: yamllint.yaml
-          yamllint_file_or_dir: '.'
+          yamllint_file_or_dir: "."
           yamllint_comment: true
         env:
           GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  
+
   semgrep:
-    name: Semgrep Scan
+    name: Scan
     runs-on: ubuntu-latest
+    env:
+      SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
     container:
       image: returntocorp/semgrep
+    if: (github.actor != 'dependabot[bot]')
     steps:
-    - uses: actions/checkout@v3
-    - run: semgrep ci
+      - uses: actions/checkout@v3
+      - run: semgrep ci
 
   trivy-iac-scan:
     name: Trivy IaC Scan
@@ -49,14 +52,14 @@ jobs:
       - name: Run Trivy vulnerability scanner in IaC mode
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'config'
+          scan-type: "config"
           hide-progress: false
-          format: 'table'
-          exit-code: '1'
+          format: "json"
+          exit-code: "1"
           ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
+          severity: "CRITICAL,HIGH"
 
       - name: Upload Trivy scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v1
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
