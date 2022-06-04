@@ -64,3 +64,79 @@ jobs:
         uses: github/codeql-action/upload-sarif@v1
         with:
           sarif_file: "trivy-results.sarif"
+
+  cluster-terraform:
+    needs:
+      - actionlint
+      - semgrep
+      - trivy-iac-scan
+      - yamllint
+    name: Validate and Plan Cluster Terraform
+    runs-on: ubuntu-latest
+    container: hashicorp/terraform:1.2.0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Format
+        id: fmt-cluster
+        run: terraform fmt -check
+
+      - name: Init
+        id: init-cluster
+        run: terraform init
+
+      - name: Validate
+        id: validate-cluster
+        run: terraform validate -no-color
+
+      - name: Plan
+        id: plan-cluster
+        if: github.event_name == 'pull_request'
+        run: |
+          PLAN=$(terraform plan -no-color -input=false)
+          SCRIPT_RC=$?
+          echo "::set-output name=cluster_plan::${PLAN//$'\n'/\\n}"
+          exit $SCRIPT_RC
+        continue-on-error: true
+
+      - name: Update Pull Request
+        uses: actions/github-script@v6
+        if: github.event_name == 'pull_request'
+        env:
+          CLUSTER_PLAN: "terraform\n${{ steps.plan-cluster.outputs.cluster_plan }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### [CLUSTER] Terraform Format and Style 🖌\`${{ steps.fmt-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Initialization ⚙️\`${{ steps.init-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Plan 📖\`${{ steps.plan-cluster.outcome }}\`
+            #### [CLUSTER] Terraform Validation 🤖\`${{ steps.validate-cluster.outcome }}\`
+
+            <details><summary>Show Plan for Cluster</summary>
+
+            \`\`\`\n
+            ${process.env.CLUSTER_PLAN.replace(/\\n/g, '\n')}
+            \`\`\`
+
+            </details>
+
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            })
+
+      - name: Terraform Cluster Plan Status
+        if: steps.plan-cluster.outcome == 'failure'
+        run: exit 1
