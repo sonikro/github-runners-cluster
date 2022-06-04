@@ -1,4 +1,4 @@
-name: Terraform
+name: Deploy
 on:
   push:
     branches:
@@ -6,15 +6,7 @@ on:
     paths-ignore:
       - "**.md"
       - .gitignore
-      - .github/workflows/destroy**
-  pull_request:
-    branches:
-      - main
-    paths-ignore:
-      - "**.md"
-      - .gitignore
-      - .github/workflows/destroy**
-
+      
 jobs:
   cluster-terraform:
     name: Cluster Terraform CI
@@ -168,7 +160,7 @@ jobs:
         working-directory: setup
         if: github.event_name == 'pull_request'
         run: |
-          PLAN=$(terraform plan -no-color -input=false)
+          PLAN=$(terraform plan -no-color -input=false --var personal_access_token='${{ secrets.GH_PERSONAL_TOKEN }}')
           SCRIPT_RC=$?
           echo "::set-output name=setup_plan::${PLAN//$'\n'/\\n}"
           exit $SCRIPT_RC
@@ -177,7 +169,7 @@ jobs:
       - name: Setup Plan for Deploy
         working-directory: setup
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform plan -no-color -input=false --out plan-setup.json
+        run: terraform plan -no-color -input=false --var personal_access_token='${{ secrets.GH_PERSONAL_TOKEN }}' --out plan-setup.json
 
       - name: Stash Plan for Deploy
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -250,4 +242,4 @@ jobs:
 
       - name: Setup Charts
         working-directory: setup
-        run: terraform apply -auto-approve -input=false plan-setup.json
+        run: terraform apply -auto-approve --var personal_access_token='${{ secrets.GH_PERSONAL_TOKEN }}' --var webhook_secret='${{ secrets.GH_WEBHOOK_SECRET }}' -input=false plan-setup.json
